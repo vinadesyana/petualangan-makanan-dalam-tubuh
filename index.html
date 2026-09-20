@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Petualangan Pencernaan - Gamifikasi IPA SMP</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
+  html, body {
+    height: 100%; overflow: hidden;
+    background: #0f172a; color: #e2e8f0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    user-select: none;
+  }
+  #app {
+    position: relative; width: 100vw; height: 100vh;
+    max-width: 480px; margin: 0 auto;
+    display: flex; flex-direction: column;
+    background: radial-gradient(circle at 50% 0%, #1e293b 0%, #0f172a 70%);
+  }
+
+  /* HEADER */
+  header {
+    padding: 10px 14px; display: flex; align-items: center;
+    justify-content: space-between;
+    background: rgba(15,23,42,.9);
+    border-bottom: 1px solid #1e293b;
+    z-index: 20; flex-shrink: 0;
+  }
+  header h1 {
+    font-size: 14px; font-weight: 700;
+    background: linear-gradient(90deg, #4ade80, #22d3ee);
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+  }
+  .hud { display: flex; gap: 6px; font-size: 11px; }
+  .hud .chip {
+    background: #1e293b; padding: 4px 8px; border-radius: 20px;
+    border: 1px solid #334155; font-weight: 700;
+  }
+  .hud .streak { color: #fbbf24; }
+  .hud .lives { color: #f87171; }
+
+  /* STAGE */
+  #stage { position: relative; flex: 1; overflow: hidden; }
+  #gl { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; }
+  #anatomy {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    z-index: 2;
+  }
+
+  /* Food emoji */
+  #food {
+    position: absolute; font-size: 26px;
+    transform: translate(-50%, -50%);
+    transition: left .8s cubic-bezier(.34,1.3,.64,1), top .8s cubic-bezier(.34,1.3,.64,1);
+    z-index: 8;
+    filter: drop-shadow(0 0 8px rgba(251,191,36,.9));
+    pointer-events: none;
+  }
+  #food.bump { animation: bump .5s ease; }
+  @keyframes bump {
+    0%,100% { transform: translate(-50%,-50%) scale(1); }
+    40% { transform: translate(-50%,-50%) scale(1.6) rotate(-15deg); }
+    70% { transform: translate(-50%,-50%) scale(.85) rotate(12deg); }
+  }
+
+  /* Panel kuis */
+  #quizPanel {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    background: rgba(30,41,59,.98);
+    border-top: 2px solid #22c55e;
+    border-radius: 20px 20px 0 0;
+    padding: 14px 16px 20px;
+    transform: translateY(105%);
+    transition: transform .4s cubic-bezier(.34,1.3,.64,1);
+    z-index: 15; max-height: 75%; overflow-y: auto;
+  }
+  #quizPanel.show { transform: translateY(0); }
+
+  .q-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .q-tag {
+    font-size: 10px; font-weight: 800; letter-spacing: .8px;
+    color: #22c55e; background: rgba(34,197,94,.15);
+    border: 1px solid rgba(34,197,94,.4);
+    padding: 3px 8px; border-radius: 6px;
+  }
+  .q-count { font-size: 11px; color: #94a3b8; font-weight: 600; }
+  .q-text { font-size: 14px; line-height: 1.5; margin-bottom: 12px; font-weight: 500; }
+
+  .options { display: flex; flex-direction: column; gap: 8px; }
+  .opt {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; text-align: left;
+    background: #334155; border: 2px solid transparent;
+    color: #e2e8f0; padding: 11px 13px; border-radius: 12px;
+    font-size: 13px; font-family: inherit; cursor: pointer;
+    transition: all .18s; line-height: 1.35;
+  }
+  .opt .key {
+    flex: 0 0 24px; height: 24px; border-radius: 7px;
+    background: #0f172a; display: grid; place-items: center;
+    font-weight: 800; font-size: 12px; color: #94a3b8;
+  }
+  .opt.correct { background: rgba(34,197,94,.25); border-color: #22c55e; color: #bbf7d0; }
+  .opt.correct .key { background: #22c55e; color: #052e16; }
+  .opt.wrong { background: rgba(239,68,68,.25); border-color: #ef4444; color: #fecaca; animation: shake .4s; }
+  .opt.wrong .key { background: #ef4444; color: #fff; }
+  .opt:disabled { cursor: default; }
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    25% { transform: translateX(-8px); }
+    50% { transform: translateX(8px); }
+    75% { transform: translateX(-4px); }
+  }
+
+  .feedback {
+    margin-top: 10px; font-size: 12.5px; padding: 10px 12px;
+    border-radius: 10px; line-height: 1.45; display: none;
+  }
+  .feedback.show { display: block; }
+  .feedback.ok { background: rgba(34,197,94,.15); border-left: 3px solid #22c55e; color: #bbf7d0; }
+  .feedback.no { background: rgba(239,68,68,.15); border-left: 3px solid #ef4444; color: #fecaca; }
+
+  .btn {
+    margin-top: 11px; width: 100%; padding: 12px;
+    border-radius: 12px; border: none;
+    background: linear-gradient(180deg, #22c55e, #16a34a);
+    color: #052e16; font-weight: 800; font-size: 14px;
+    font-family: inherit; cursor: pointer;
+    display: none; box-shadow: 0 4px 0 #14532d;
+    transition: transform .1s;
+  }
+  .btn.show { display: block; }
+  .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #14532d; }
+
+  /* Overlay */
+  .overlay {
+    position: absolute; inset: 0;
+    background: rgba(8,12,24,.95);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 24px; text-align: center;
+    z-index: 40; opacity: 0; pointer-events: none;
+    transition: opacity .3s;
+  }
+  .overlay.show { opacity: 1; pointer-events: auto; }
+  .overlay h2 {
+    font-size: 22px; margin-bottom: 8px;
+    background: linear-gradient(90deg, #4ade80, #22d3ee);
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+  }
+  .overlay p { font-size: 13px; color: #94a3b8; line-height: 1.55; margin-bottom: 18px; max-width: 320px; }
+
+  .organ-legend { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 20px; }
+  .organ-legend span {
+    font-size: 10px; background: #1e293b;
+    border: 1px solid #334155; padding: 4px 9px;
+    border-radius: 20px; color: #94a3b8; font-weight: 600;
+  }
+  .start-btn {
+    padding: 14px 34px; border-radius: 14px; border: none;
+    background: linear-gradient(180deg, #22c55e, #16a34a);
+    color: #052e16; font-weight: 900; font-size: 15px;
+    font-family: inherit; cursor: pointer;
+    box-shadow: 0 5px 0 #14532d; letter-spacing: .5px;
+  }
+  .start-btn:active { transform: translateY(4px); box-shadow: 0 1px 0 #14532d; }
+
+  /* Badge */
+  .badge-wrap { position: relative; width: 170px; height: 170px; margin-bottom: 14px; display: grid; place-items: center; }
+  .badge-glow {
+    position: absolute; inset: -18px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(251,191,36,.55) 0%, transparent 68%);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,100% { transform: scale(.9); opacity: .65; }
+    50% { transform: scale(1.12); opacity: 1; }
+  }
+  .badge {
+    position: relative; width: 150px; height: 150px; border-radius: 50%;
+    background: conic-gradient(from 0deg, #fbbf24, #f59e0b, #fde68a, #fbbf24);
+    display: grid; place-items: center;
+    box-shadow: 0 0 30px rgba(251,191,36,.6), inset 0 0 24px rgba(255,255,255,.35);
+    animation: spinIn .8s cubic-bezier(.34,1.56,.64,1);
+  }
+  @keyframes spinIn {
+    from { transform: scale(0) rotate(-180deg); }
+    to { transform: scale(1) rotate(0); }
+  }
+  .badge-inner {
+    width: 122px; height: 122px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #1e293b, #0f172a);
+    border: 3px solid rgba(255,255,255,.22);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 2px;
+  }
+  .badge-emoji { font-size: 42px; line-height: 1; filter: drop-shadow(0 0 8px rgba(251,191,36,.8)); }
+  .badge-title { font-size: 8px; font-weight: 800; letter-spacing: 1px; color: #fbbf24; text-transform: uppercase; }
+
+  .reward-stats { display: flex; gap: 10px; margin-bottom: 18px; }
+  .rstat {
+    background: #1e293b; border: 1px solid #334155;
+    border-radius: 12px; padding: 9px 16px; min-width: 78px;
+  }
+  .rstat b { display: block; font-size: 18px; color: #22c55e; }
+  .rstat small { font-size: 9.5px; color: #94a3b8; text-transform: uppercase; letter-spacing: .5px; }
+
+  .confetti {
+    position: fixed; width: 9px; height: 14px;
+    top: -20px; z-index: 45; pointer-events: none;
+    animation: fall linear forwards;
+  }
+  @keyframes fall {
+    to { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+  }
+
+  #progressBar {
+    position: absolute; top: 0; left: 0; height: 3px;
+    background: linear-gradient(90deg, #22c55e, #22d3ee);
+    width: 0%; transition: width .6s ease;
+    z-index: 18;
+    box-shadow: 0 0 10px rgba(34,197,94,.8);
+  }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="progressBar"></div>
+
+  <header>
+    <h1>🍽️ Petualangan Pencernaan</h1>
+    <div class="hud">
+      <div class="chip streak" id="hudStreak">🔥 0</div>
+      <div class="chip lives" id="hudLives">❤️ 3</div>
+      <div class="chip" id="hudProgress">0/10</div>
+    </div>
+  </header>
+
+  <div id="stage">
+    <canvas id="gl"></canvas>
+    <canvas id="anatomy"></canvas>
+    <div id="food" class="hidden">🍔</div>
+
+    <div class="overlay show" id="startOverlay">
+      <h2>Sistem Pencernaan Manusia</h2>
+      <p>Bantu makanan melewati organ pencernaan! Jawab kuis dengan benar agar makanan turun. Salah = makanan tertahan dan harus mengulang.</p>
+      <div class="organ-legend">
+        <span>👄 Mulut</span><span>🦴 Kerongkongan</span><span>🫙 Lambung</span>
+        <span>🌀 Usus Halus</span><span>💧 Usus Besar</span><span>🚪 Anus</span>
+      </div>
+      <button class="start-btn" id="startBtn">MULAI PETUALANGAN</button>
+    </div>
+
+    <div class="overlay" id="rewardOverlay">
+      <div class="badge-wrap">
+        <div class="badge-glow"></div>
+        <div class="badge">
+          <div class="badge-inner">
+            <div class="badge-emoji" id="badgeEmoji">🍔</div>
+            <div class="badge-title">Badge Makanan</div>
+          </div>
+        </div>
+      </div>
+      <h2 id="rewardTitle">Makanan Lezat!</h2>
+      <p id="rewardDesc">Kamu berhasil menuntaskan perjalanan makanan!</p>
+      <div class="reward-stats">
+        <div class="rstat"><b id="rScore">0</b><small>Skor</small></div>
+        <div class="rstat"><b id="rStreak">0</b><small>Streak</small></div>
+        <div class="rstat"><b id="rLives">0</b><small>Nyawa</small></div>
+      </div>
+      <button class="start-btn" id="restartBtn">MAIN LAGI</button>
+    </div>
+
+    <div id="quizPanel">
+      <div class="q-head">
+        <span class="q-tag" id="qOrgan">MULUT</span>
+        <span class="q-count" id="qCount">Soal 1 / 10</span>
+      </div>
+      <p class="q-text" id="qText">Pertanyaan...</p>
+      <div class="options" id="options"></div>
+      <div class="feedback" id="feedback"></div>
+      <button class="btn" id="nextBtn">LANJUT ➜</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   DATA GAME (JSON)
+   ========================================================= */
+const GAME_DATA = {
+  meta: {
+    title: "Petualangan Pencernaan",
+    jenjang: "SMP",
+    mapel: "IPA - Sistem Pencernaan Manusia",
+    version: "1.0"
+  },
+  organs: [
+    { id:"mulut",        name:"Mulut",        emoji:"👄", x:50, y:14 },
+    { id:"kerongkongan", name:"Kerongkongan", emoji:"🦴", x:50, y:28 },
+    { id:"lambung",      name:"Lambung",      emoji:"🫙", x:44, y:43 },
+    { id:"usushalus",    name:"Usus Halus",   emoji:"🌀", x:54, y:58 },
+    { id:"ususbesar",    name:"Usus Besar",   emoji:"💧", x:44, y:73 },
+    { id:"anus",         name:"Anus",         emoji:"🚪", x:53, y:88 }
+  ],
+  questions: [
+    { organ:"Mulut", q:"Organ pertama yang dilalui makanan saat masuk ke tubuh adalah...",
+      options:["Mulut","Kerongkongan","Lambung","Usus halus"], answer:0,
+      explain:"Makanan masuk melalui mulut, tempat pencernaan mekanik (gigi) dan kimiawi (enzim ptialin)." },
+    { organ:"Mulut", q:"Enzim dalam air liur yang mengubah amilum menjadi maltosa adalah...",
+      options:["Pepsin","Ptialin (amilase)","Tripsin","Renin"], answer:1,
+      explain:"Ptialin/amilase dalam air liur mengubah amilum menjadi maltosa." },
+    { organ:"Kerongkongan", q:"Gerakan otot kerongkongan yang mendorong makanan ke lambung disebut...",
+      options:["Defekasi","Peristaltik","Deglutisi","Absorpsi"], answer:1,
+      explain:"Gerak peristaltik = kontraksi otot bergantian untuk mendorong makanan." },
+    { organ:"Lambung", q:"Enzim di lambung yang mengubah protein menjadi pepton adalah...",
+      options:["Amilase","Pepsin","Lipase","Maltase"], answer:1,
+      explain:"Pepsin (dari pepsinogen + HCl) mengubah protein menjadi pepton." },
+    { organ:"Lambung", q:"Asam yang membunuh bakteri pada makanan di lambung adalah...",
+      options:["Asam sulfat","Asam klorida (HCl)","Asam cuka","Asam sitrat"], answer:1,
+      explain:"HCl membunuh bakteri, mengaktifkan pepsinogen, dan mengasamkan makanan (kimus)." },
+    { organ:"Usus Halus", q:"Penyerapan sari-sari makanan terjadi di...",
+      options:["Lambung","Usus halus (jejunum & ileum)","Usus besar","Kerongkongan"], answer:1,
+      explain:"Usus halus adalah tempat utama penyerapan sari makanan melalui vili." },
+    { organ:"Usus Halus", q:"Cairan empedu dari hati berfungsi untuk...",
+      options:["Mengubah protein","Mengemulsikan lemak","Mengubah amilum","Menyerap air"], answer:1,
+      explain:"Empedu mengemulsikan lemak agar mudah dicerna enzim lipase." },
+    { organ:"Usus Besar", q:"Fungsi utama usus besar adalah...",
+      options:["Menyerap protein","Menyerap air & membusukkan sisa","Mengubah lemak","Menghasilkan pepsin"], answer:1,
+      explain:"Usus besar menyerap air & elektrolit serta membusukkan sisa makanan." },
+    { organ:"Usus Besar", q:"Bakteri Escherichia coli di usus besar bermanfaat untuk...",
+      options:["Membusukkan sisa makanan & buat vitamin K","Mencerna protein","Menyerap air","Menghasilkan HCl"], answer:0,
+      explain:"E. coli membantu pembusukan sisa makanan dan menghasilkan vitamin K." },
+    { organ:"Anus", q:"Proses pengeluaran sisa pencernaan melalui anus disebut...",
+      options:["Defekasi","Deglutisi","Absorpsi","Sekresi"], answer:0,
+      explain:"Defekasi = pengeluaran feses (sisa pencernaan) melalui anus." }
+  ],
+  rewards: [
+    { emoji:"🍔", title:"Burger Lezat!",   desc:"Kamu menaklukkan sistem pencernaan dengan sempurna!" },
+    { emoji:"🍕", title:"Pizza Spesial!",  desc:"Luar biasa! Pengetahuan pencernaanmu mengagumkan!" },
+    { emoji:"🍜", title:"Mie Juara!",      desc:"Hebat! Makanan berhasil melewati seluruh organ!" },
+    { emoji:"🍩", title:"Donat Manis!",    desc:"Selamat! Kamu memahami sistem pencernaan manusia!" },
+    { emoji:"🍎", title:"Apel Sehat!",     desc:"Kerja bagus! Terus belajar tentang tubuh manusia!" }
+  ]
+};
+
+/* =========================================================
+   STATE
+   ========================================================= */
+const state = {
+  currentOrganIdx: 0,
+  questionIdx: 0,
+  score: 0,
+  streak: 0,
+  lives: 3,
+  answered: false,
+  active: false
+};
+
+/* =========================================================
+   DOM
+   ========================================================= */
+const $ = (id) => document.getElementById(id);
+const els = {
+  glCanvas: $("gl"),
+  anatCanvas: $("anatomy"),
+  food: $("food"),
+  stage: $("stage"),
+  quizPanel: $("quizPanel"),
+  qOrgan: $("qOrgan"),
+  qCount: $("qCount"),
+  qText: $("qText"),
+  options: $("options"),
+  feedback: $("feedback"),
+  nextBtn: $("nextBtn"),
+  startOverlay: $("startOverlay"),
+  rewardOverlay: $("rewardOverlay"),
+  startBtn: $("startBtn"),
+  restartBtn: $("restartBtn"),
+  hudStreak: $("hudStreak"),
+  hudLives: $("hudLives"),
+  hudProgress: $("hudProgress"),
+  progressBar: $("progressBar"),
+  rewardTitle: $("rewardTitle"),
+  rewardDesc: $("rewardDesc"),
+  rScore: $("rScore"),
+  rStreak: $("rStreak"),
+  rLives: $("rLives"),
+  badgeEmoji: $("badgeEmoji")
+};
+
+/* =========================================================
+   WEBGL BACKGROUND (opsional, kalau gagal tidak apa-apa)
+   ========================================================= */
+function initWebGL() {
+  const canvas = els.glCanvas;
+  const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+  if (!gl) { canvas.style.display = "none"; return; }
+
+  const vsSrc = `
+    attribute vec2 aPos;
+    varying vec2 vPos;
+    void main() {
+      vPos = aPos;
+      gl_Position = vec4(aPos, 0.0, 1.0);
+    }`;
+  const fsSrc = `
+    precision mediump float;
+    varying vec2 vPos;
+    uniform float uTime;
+    void main() {
+      float d = length(vPos - vec2(0.0, 0.3));
+      float glow = 0.12 / (d + 0.4);
+      vec3 col = vec3(0.06, 0.09, 0.16) + vec3(0.05, 0.35, 0.28) * glow;
+      col += 0.03 * sin(uTime + vPos.y * 6.0);
+      gl_FragColor = vec4(col, 1.0);
+    }`;
+
+  function compile(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      console.warn("Shader error:", gl.getShaderInfoLog(s));
+      return null;
+    }
+    return s;
+  }
+  const vs = compile(gl.VERTEX_SHADER, vsSrc);
+  const fs = compile(gl.FRAGMENT_SHADER, fsSrc);
+  if (!vs || !fs) { canvas.style.display = "none"; return; }
+
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vs);
+  gl.attachShader(prog, fs);
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    console.warn("Link error:", gl.getProgramInfoLog(prog));
+    canvas.style.display = "none";
+    return;
+  }
+  gl.useProgram(prog);
+
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+    -1,-1, 1,-1, -1,1,
+    -1,1,  1,-1, 1,1
+  ]), gl.STATIC_DRAW);
+
+  const aPos = gl.getAttribLocation(prog, "aPos");
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+  const uTime = gl.getUniformLocation(prog, "uTime");
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    gl.viewport(0, 0, canvas.width, canvas.height);
+  }
+  resize();
+  window.addEventListener("resize", resize);
+
+  function render(t) {
+    gl.uniform1f(uTime, t * 0.001);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    requestAnimationFrame(render);
+  }
+  requestAnimationFrame(render);
+}
+
+/* =========================================================
+   ANATOMI 2D (Canvas) - gambar tubuh + organ
+   ========================================================= */
+const anat = {
+  ctx: null,
+  W: 0, H: 0,
+  dpr: 1,
+  init() {
+    this.ctx = els.anatCanvas.getContext("2d");
+    this.resize();
+    window.addEventListener("resize", () => this.resize());
+  },
+  resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const rect = els.anatCanvas.getBoundingClientRect();
+    this.W = rect.width; this.H = rect.height; this.dpr = dpr;
+    els.anatCanvas.width = rect.width * dpr;
+    els.anatCanvas.height = rect.height * dpr;
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.draw();
+  },
+  pos(o) {
+    return { x: (o.x / 100) * this.W, y: (o.y / 100) * this.H };
+  },
+  draw() {
+    const ctx = this.ctx;
+    ctx.clearRect(0, 0, this.W, this.H);
+
+    const orgs = GAME_DATA.organs;
+
+    // 1. Gambar badan manusia (siluet)
+    const bodyW = this.W * 0.55;
+    const bodyX = this.W / 2 - bodyW / 2;
+    const bodyY = this.H * 0.02;
+    const bodyH = this.H * 0.96;
+
+    ctx.save();
+    // Kepala
+    ctx.beginPath();
+    ctx.ellipse(this.W/2, bodyY + this.H*0.07, this.W*0.13, this.H*0.06, 0, 0, Math.PI*2);
+    ctx.fillStyle = "rgba(30, 41, 59, 0.55)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(71, 85, 105, 0.9)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Badan
+    ctx.beginPath();
+    ctx.moveTo(this.W/2 - this.W*0.10, bodyY + this.H*0.14);
+    ctx.quadraticCurveTo(this.W/2 - this.W*0.18, bodyY + this.H*0.35, this.W/2 - this.W*0.15, bodyY + this.H*0.55);
+    ctx.quadraticCurveTo(this.W/2 - this.W*0.16, bodyY + this.H*0.75, this.W/2 - this.W*0.13, bodyY + this.H*0.9);
+    ctx.lineTo(this.W/2 + this.W*0.13, bodyY + this.H*0.9);
+    ctx.quadraticCurveTo(this.W/2 + this.W*0.16, bodyY + this.H*0.75, this.W/2 + this.W*0.15, bodyY + this.H*0.55);
+    ctx.quadraticCurveTo(this.W/2 + this.W*0.18, bodyY + this.H*0.35, this.W/2 + this.W*0.10, bodyY + this.H*0.14);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(30, 41, 59, 0.5)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(71, 85, 105, 0.9)";
+    ctx.stroke();
+    ctx.restore();
+
+    // 2. Path saluran pencernaan (garis antar organ)
+    for (let i = 0; i < orgs.length - 1; i++) {
+      const a = this.pos(orgs[i]);
+      const b = this.pos(orgs[i + 1]);
+      const passed = i < state.currentOrganIdx;
+      const active = i === state.currentOrganIdx - 1 || i === state.currentOrganIdx;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.lineCap = "round";
+      ctx.lineWidth = Math.max(8, this.W * 0.05);
+      if (passed) ctx.strokeStyle = "rgba(34, 197, 94, 0.55)";
+      else if (active) ctx.strokeStyle = "rgba(34, 197, 94, 0.35)";
+      else ctx.strokeStyle = "rgba(51, 65, 85, 0.7)";
+      ctx.stroke();
+
+      // inner highlight
+      ctx.lineWidth = Math.max(2, this.W * 0.012);
+      if (passed) ctx.strokeStyle = "rgba(134, 239, 172, 0.9)";
+      else if (active) ctx.strokeStyle = "rgba(134, 239, 172, 0.5)";
+      else ctx.strokeStyle = "rgba(100, 116, 139, 0.5)";
+      ctx.stroke();
+    }
+
+    // 3. Gambar organ (lingkaran)
+    orgs.forEach((o, i) => {
+      const { x, y } = this.pos(o);
+      const r = Math.max(16, this.W * 0.075);
+      const passed = i < state.currentOrganIdx;
+      const active = i === state.currentOrganIdx;
+
+      // glow saat aktif
+      if (active) {
+        const g = ctx.createRadialGradient(x, y, r * 0.4, x, y, r * 2);
+        g.addColorStop(0, "rgba(251, 191, 36, 0.55)");
+        g.addColorStop(1, "rgba(251, 191, 36, 0)");
+        ctx.beginPath();
+        ctx.arc(x, y, r * 2, 0, Math.PI * 2);
+        ctx.fillStyle = g;
+        ctx.fill();
+      }
+
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      if (passed) {
+        ctx.fillStyle = "rgba(34, 197, 94, 0.85)";
+      } else if (active) {
+        ctx.fillStyle = "rgba(251, 191, 36, 0.95)";
+      } else {
+        ctx.fillStyle = "rgba(51, 65, 85, 0.9)";
+      }
+      ctx.fill();
+      ctx.lineWidth = active ? 3 : 2;
+      ctx.strokeStyle = active ? "#fde68a" : (passed ? "#86efac" : "#475569");
+      ctx.stroke();
+
+      // emoji organ
+      ctx.font = `${r * 0.95}px serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(o.emoji, x, y + 1);
+
+      // Label nama organ
+      const labelY = y + r + 12;
+      ctx.font = `600 ${Math.max(10, this.W * 0.033)}px -apple-system, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const label = o.name;
+      const m = ctx.measureText(label);
+      const padX = 8, padY = 4;
+      const lw = m.width + padX * 2;
+      const lh = 16;
+      ctx.beginPath();
+      ctx.roundRect(x - lw/2, labelY - lh/2, lw, lh, 8);
+      if (active) ctx.fillStyle = "rgba(251, 191, 36, 0.95)";
+      else if (passed) ctx.fillStyle = "rgba(34, 197, 94, 0.85)";
+      else ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+      ctx.fill();
+      ctx.strokeStyle = active ? "#fde68a" : (passed ? "#86efac" : "#334155");
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = active ? "#052e16" : (passed ? "#052e16" : "#94a3b8");
+      ctx.fillText(label, x, labelY + 1);
+    });
+  }
+};
+
+/* =========================================================
+   POSISI MAKANAN
+   ========================================================= */
+function placeFood() {
+  const o = GAME_DATA.organs
